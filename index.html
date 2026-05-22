@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 訓練師開合跳挑戰</title>
+    <style>
+        :root {
+            --ink: #1A1F3A;
+            --coral: #F96167;
+            --sun: #F9E795;
+            --cream: #FFF5F1;
+            --sand: #E5DDD5;
+            --muted: #6B6E7B;
+            --deep: #2F3C7E;
+            --white: #FFFFFF;
+            --up: #F9E795;
+            --down: #F96167;
+            --idle: #E5DDD5;
+            --shadow: 0 24px 60px rgba(26, 31, 58, 0.18);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            min-height: 100vh;
+            margin: 0;
+            color: var(--ink);
+            font-family: Calibri, "Microsoft JhengHei", "Noto Sans TC", sans-serif;
+            background:
+                linear-gradient(135deg, rgba(249, 97, 103, 0.13), transparent 32%),
+                linear-gradient(315deg, rgba(249, 231, 149, 0.52), transparent 38%),
+                var(--cream);
+        }
+
+        button,
+        input {
+            font: inherit;
+        }
+
+        .page {
+            width: min(1180px, calc(100% - 32px));
+            min-height: 100vh;
+            margin: 0 auto;
+            padding: 28px 0;
+            display: grid;
+            grid-template-rows: auto 1fr;
+            gap: 22px;
+        }
+
+        .hero {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 18px;
+            align-items: end;
+            border-bottom: 3px solid var(--ink);
+            padding-bottom: 18px;
+        }
+
+        .eyebrow {
+            color: var(--coral);
+            font-size: 0.84rem;
+            font-weight: 800;
+            letter-spacing: 0;
+            margin: 0 0 8px;
+            text-transform: uppercase;
+        }
+
+        h1 {
+            font-size: clamp(2.4rem, 5vw, 5.3rem);
+            line-height: 0.92;
+            margin: 0;
+            max-width: 760px;
+        }
+
+        .hero-note {
+            max-width: 300px;
+            color: var(--muted);
+            font-size: 1rem;
+            line-height: 1.5;
+            text-align: right;
+        }
+
+        .stage {
+            display: grid;
+            grid-template-columns: minmax(320px, 1.25fr) minmax(300px, 0.75fr);
+            gap: 22px;
+            align-items: stretch;
+        }
+
+        .camera-panel,
+        .control-panel {
+            border: 3px solid var(--ink);
+            background: rgba(255, 255, 255, 0.86);
+            box-shadow: var(--shadow);
+        }
+
+        .camera-panel {
+            position: relative;
+            min-height: 560px;
+            padding: 18px;
+            display: grid;
+            grid-template-rows: auto 1fr auto;
+            gap: 16px;
+        }
+
+        .panel-bar {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            min-height: 34px;
+            border: 2px solid var(--ink);
+            background: var(--sun);
+            color: var(--ink);
+            font-size: 0.88rem;
+            font-weight: 800;
+            padding: 5px 10px;
+        }
+
+        .status {
+            color: var(--muted);
+            font-size: 0.95rem;
+            font-weight: 700;
+            text-align: right;
+        }
+
+        .canvas-shell {
+            position: relative;
+            display: grid;
+            place-items: center;
+            overflow: hidden;
+            min-height: 420px;
+            background:
+                linear-gradient(90deg, rgba(26, 31, 58, 0.08) 1px, transparent 1px),
+                linear-gradient(0deg, rgba(26, 31, 58, 0.08) 1px, transparent 1px),
+                var(--ink);
+            background-size: 28px 28px;
+        }
+
+        #canvas {
+            width: min(100%, 520px);
+            aspect-ratio: 1;
+            border: 4px solid var(--white);
+            background: #111528;
+            object-fit: contain;
+        }
+
+        .loading-cover {
+            position: absolute;
+            inset: 0;
+            display: grid;
+            place-items: center;
+            padding: 24px;
+            color: var(--white);
+            text-align: center;
+            background: rgba(26, 31, 58, 0.88);
+            transition: opacity 180ms ease, visibility 180ms ease;
+        }
+
+        .loading-cover.is-hidden {
+            opacity: 0;
+            visibility: hidden;
+        }
+
+        .loading-title {
+            margin: 0 0 10px;
+            color: var(--sun);
+            font-size: 1.75rem;
+            font-weight: 900;
+        }
+
+        .loading-copy {
+            margin: 0;
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 1rem;
+        }
+
+        .prediction-list {
+            display: grid;
+            gap: 8px;
+        }
+
+        .prediction-row {
+            display: grid;
+            grid-template-columns: 76px 1fr 48px;
+            gap: 10px;
+            align-items: center;
+            color: var(--muted);
+            font-size: 0.95rem;
+            font-weight: 700;
+        }
+
+        .meter {
+            height: 10px;
+            border: 2px solid var(--ink);
+            background: var(--cream);
+        }
+
+        .meter-fill {
+            width: 0%;
+            height: 100%;
+            background: var(--coral);
+            transition: width 120ms ease;
+        }
+
+        .control-panel {
+            padding: 22px;
+            display: grid;
+            gap: 18px;
+            align-content: start;
+        }
+
+        .scoreboard {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .metric {
+            min-height: 128px;
+            border: 3px solid var(--ink);
+            background: var(--cream);
+            padding: 14px;
+            display: grid;
+            align-content: space-between;
+        }
+
+        .metric.primary {
+            grid-column: span 2;
+            background: var(--ink);
+            color: var(--white);
+        }
+
+        .metric-label {
+            color: inherit;
+            font-size: 0.9rem;
+            font-weight: 800;
+        }
+
+        .metric-value {
+            font-size: clamp(2.25rem, 7vw, 4.6rem);
+            line-height: 0.95;
+            font-weight: 900;
+        }
+
+        .metric.primary .metric-value {
+            color: var(--sun);
+        }
+
+        .pose-pill {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 44px;
+            width: 100%;
+            border: 3px solid var(--ink);
+            background: var(--idle);
+            color: var(--ink);
+            font-size: 1.1rem;
+            font-weight: 900;
+        }
+
+        .pose-pill.up {
+            background: var(--up);
+        }
+
+        .pose-pill.down {
+            background: var(--down);
+            color: var(--white);
+        }
+
+        .timer-form {
+            display: grid;
+            gap: 8px;
+        }
+
+        label {
+            color: var(--muted);
+            font-size: 0.92rem;
+            font-weight: 800;
+        }
+
+        .duration-control {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            border: 3px solid var(--ink);
+            background: var(--white);
+        }
+
+        #durationInput {
+            min-width: 0;
+            border: 0;
+            background: transparent;
+            color: var(--ink);
+            font-size: 1.45rem;
+            font-weight: 900;
+            padding: 12px;
+            outline: none;
+        }
+
+        .seconds-label {
+            display: grid;
+            place-items: center;
+            min-width: 56px;
+            background: var(--sand);
+            color: var(--muted);
+            font-weight: 900;
+        }
+
+        .controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .action {
+            min-height: 54px;
+            border: 3px solid var(--ink);
+            color: var(--ink);
+            background: var(--white);
+            font-size: 1rem;
+            font-weight: 900;
+            cursor: pointer;
+            transition: transform 120ms ease, box-shadow 120ms ease, opacity 120ms ease;
+        }
+
+        .action:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 0 rgba(26, 31, 58, 0.16);
+        }
+
+        .action:disabled {
+            cursor: not-allowed;
+            opacity: 0.48;
+        }
+
+        .action.primary {
+            grid-column: span 2;
+            background: var(--coral);
+            color: var(--white);
+        }
+
+        .action.pause {
+            background: var(--sun);
+        }
+
+        .action.reset {
+            background: var(--sand);
+        }
+
+        .rule-list {
+            margin: 0;
+            padding: 14px 16px;
+            border-left: 8px solid var(--coral);
+            background: var(--cream);
+            color: var(--muted);
+            font-size: 0.96rem;
+            line-height: 1.45;
+        }
+
+        .rule-list strong {
+            color: var(--ink);
+        }
+
+        @media (max-width: 900px) {
+            .hero,
+            .stage {
+                grid-template-columns: 1fr;
+            }
+
+            .hero-note {
+                max-width: none;
+                text-align: left;
+            }
+
+            .camera-panel {
+                min-height: 0;
+            }
+        }
+
+        @media (max-width: 560px) {
+            .page {
+                width: min(100% - 18px, 1180px);
+                padding: 14px 0;
+            }
+
+            .panel-bar,
+            .scoreboard,
+            .controls {
+                grid-template-columns: 1fr;
+            }
+
+            .panel-bar {
+                display: grid;
+            }
+
+            .status {
+                text-align: left;
+            }
+
+            .metric.primary,
+            .action.primary {
+                grid-column: auto;
+            }
+
+            .canvas-shell {
+                min-height: 300px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <main class="page">
+        <header class="hero">
+            <div>
+                <p class="eyebrow">Powered by Teachable Machine</p>
+                <h1>AI 訓練師開合跳挑戰</h1>
+            </div>
+            <p class="hero-note">頁面會先準備模型與攝影機。按下開始後，才正式倒數與計算一開一合的完整次數。</p>
+        </header>
+
+        <section class="stage" aria-label="開合跳互動區">
+            <section class="camera-panel" aria-label="攝影機與骨架">
+                <div class="panel-bar">
+                    <span class="tag">SECTION 02 / 動手做 AI</span>
+                    <span class="status" id="statusText">模型載入中...</span>
+                </div>
+
+                <div class="canvas-shell">
+                    <canvas id="canvas" width="480" height="480"></canvas>
+                    <div class="loading-cover" id="loadingCover">
+                        <div>
+                            <p class="loading-title">攝影機準備中</p>
+                            <p class="loading-copy">請允許瀏覽器使用 webcam，AI 訓練師正在就位。</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="prediction-list" id="label-container" aria-label="模型辨識信心值"></div>
+            </section>
+
+            <aside class="control-panel" aria-label="挑戰控制面板">
+                <div class="scoreboard">
+                    <div class="metric primary">
+                        <span class="metric-label">剩餘時間</span>
+                        <span class="metric-value" id="timeDisplay">00:30</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">開合跳</span>
+                        <span class="metric-value" id="countDisplay">0</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">目前姿勢</span>
+                        <span class="pose-pill" id="poseDisplay">待機</span>
+                    </div>
+                </div>
+
+                <div class="timer-form">
+                    <label for="durationInput">倒數秒數</label>
+                    <div class="duration-control">
+                        <input id="durationInput" type="number" min="5" max="300" step="5" value="30">
+                        <span class="seconds-label">秒</span>
+                    </div>
+                </div>
+
+                <div class="controls">
+                    <button class="action primary" id="startButton" type="button" disabled>開始</button>
+                    <button class="action pause" id="pauseButton" type="button" disabled>暫停</button>
+                    <button class="action reset" id="resetButton" type="button">重置</button>
+                </div>
+
+                <p class="rule-list">
+                    <strong>任務規則：</strong>模型偵測到「開」再切換到「合」時計為 1 次。暫停時仍會顯示骨架，方便調整站位。
+                </p>
+            </aside>
+        </section>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/pose@0.8/dist/teachablemachine-pose.min.js"></script>
+    <script>
+        const URL = "https://teachablemachine.withgoogle.com/models/ba40_g-ne/";
+        const MIN_CLASS_CONFIDENCE = 0.75;
+        const MIN_PART_CONFIDENCE = 0.5;
+        const CANVAS_SIZE = 480;
+
+        let model;
+        let webcam;
+        let ctx;
+        let maxPredictions = 0;
+        let remainingMs = 30000;
+        let lastTick = 0;
+        let count = 0;
+        let previousCountingPose = null;
+        let currentPoseState = null;
+        let currentPoseConfidence = 0;
+        let audioContext;
+
+        const state = {
+            ready: false,
+            running: false,
+            finished: false
+        };
+
+        const elements = {};
+
+        window.addEventListener("DOMContentLoaded", () => {
+            bindElements();
+            attachEvents();
+            resetSession();
+            initializeTrainer();
+        });
+
+        function bindElements() {
+            elements.canvas = document.getElementById("canvas");
+            elements.loadingCover = document.getElementById("loadingCover");
+            elements.statusText = document.getElementById("statusText");
+            elements.labelContainer = document.getElementById("label-container");
+            elements.timeDisplay = document.getElementById("timeDisplay");
+            elements.countDisplay = document.getElementById("countDisplay");
+            elements.poseDisplay = document.getElementById("poseDisplay");
+            elements.durationInput = document.getElementById("durationInput");
+            elements.startButton = document.getElementById("startButton");
+            elements.pauseButton = document.getElementById("pauseButton");
+            elements.resetButton = document.getElementById("resetButton");
+            ctx = elements.canvas.getContext("2d");
+        }
+
+        function attachEvents() {
+            elements.startButton.addEventListener("click", startChallenge);
+            elements.pauseButton.addEventListener("click", pauseChallenge);
+            elements.resetButton.addEventListener("click", resetSession);
+            elements.durationInput.addEventListener("input", () => {
+                if (!state.running && !state.finished) {
+                    remainingMs = getDurationSeconds() * 1000;
+                    updateTimeDisplay();
+                }
+            });
+        }
+
+        async function initializeTrainer() {
+            try {
+                setStatus("模型載入中...");
+                const modelURL = URL + "model.json";
+                const metadataURL = URL + "metadata.json";
+                model = await tmPose.load(modelURL, metadataURL);
+                maxPredictions = model.getTotalClasses();
+                createPredictionRows();
+
+                setStatus("攝影機準備中...");
+                webcam = new tmPose.Webcam(CANVAS_SIZE, CANVAS_SIZE, true);
+                await webcam.setup();
+                await webcam.play();
+
+                state.ready = true;
+                elements.loadingCover.classList.add("is-hidden");
+                setStatus("準備完成，請按開始");
+                updateControls();
+                window.requestAnimationFrame(loop);
+            } catch (error) {
+                console.error(error);
+                setStatus("初始化失敗，請重新整理並允許攝影機");
+                elements.loadingCover.querySelector(".loading-title").textContent = "無法啟動攝影機";
+                elements.loadingCover.querySelector(".loading-copy").textContent = "請確認瀏覽器允許 webcam，並使用 localhost 或 HTTPS 開啟頁面。";
+            }
+        }
+
+        async function loop(timestamp) {
+            if (webcam) {
+                webcam.update();
+                await predict();
+            }
+
+            updateTimer(timestamp);
+            window.requestAnimationFrame(loop);
+        }
+
+        async function predict() {
+            const { pose, posenetOutput } = await model.estimatePose(webcam.canvas);
+            const prediction = await model.predict(posenetOutput);
+            const topPrediction = getTopPrediction(prediction);
+            const poseState = normalizePoseLabel(topPrediction.className);
+
+            currentPoseState = topPrediction.probability >= MIN_CLASS_CONFIDENCE ? poseState : null;
+            currentPoseConfidence = topPrediction.probability;
+
+            updatePredictionRows(prediction);
+            updatePoseDisplay();
+
+            if (state.running && currentPoseState) {
+                updateJumpCounter(currentPoseState);
+            }
+
+            drawPose(pose);
+        }
+
+        function getTopPrediction(prediction) {
+            return prediction.reduce((best, item) => {
+                return item.probability > best.probability ? item : best;
+            }, prediction[0]);
+        }
+
+        function normalizePoseLabel(className) {
+            const normalized = className.toLowerCase();
+            if (normalized.includes("開") || normalized.includes("up")) {
+                return "up";
+            }
+            if (normalized.includes("合") || normalized.includes("down")) {
+                return "down";
+            }
+            return null;
+        }
+
+        function updateJumpCounter(poseState) {
+            if (previousCountingPose === "up" && poseState === "down") {
+                count += 1;
+                elements.countDisplay.textContent = String(count);
+            }
+            previousCountingPose = poseState;
+        }
+
+        function startChallenge() {
+            if (!state.ready) {
+                return;
+            }
+
+            if (state.finished || remainingMs <= 0) {
+                resetSession();
+            }
+
+            state.running = true;
+            state.finished = false;
+            lastTick = performance.now();
+            ensureAudioContext();
+            setStatus("挑戰進行中");
+            updateControls();
+        }
+
+        function pauseChallenge() {
+            if (!state.running) {
+                return;
+            }
+
+            state.running = false;
+            setStatus("已暫停，可調整站位");
+            updateControls();
+        }
+
+        function resetSession() {
+            state.running = false;
+            state.finished = false;
+            remainingMs = getDurationSeconds() * 1000;
+            lastTick = 0;
+            count = 0;
+            previousCountingPose = null;
+            elements.countDisplay.textContent = "0";
+            setStatus(state.ready ? "準備完成，請按開始" : "模型載入中...");
+            updateTimeDisplay();
+            updatePoseDisplay();
+            updateControls();
+        }
+
+        function updateTimer(timestamp) {
+            if (!state.running) {
+                return;
+            }
+
+            if (!lastTick) {
+                lastTick = timestamp;
+                return;
+            }
+
+            const elapsed = timestamp - lastTick;
+            lastTick = timestamp;
+            remainingMs = Math.max(0, remainingMs - elapsed);
+            updateTimeDisplay();
+
+            if (remainingMs <= 0) {
+                finishChallenge();
+            }
+        }
+
+        function finishChallenge() {
+            state.running = false;
+            state.finished = true;
+            previousCountingPose = null;
+            setStatus("時間到，挑戰完成");
+            ringBell();
+            updateControls();
+        }
+
+        function getDurationSeconds() {
+            const value = Number.parseInt(elements.durationInput.value, 10);
+            if (Number.isNaN(value)) {
+                return 30;
+            }
+            return Math.min(300, Math.max(5, value));
+        }
+
+        function updateTimeDisplay() {
+            const totalSeconds = Math.ceil(remainingMs / 1000);
+            const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, "0");
+            const seconds = String(totalSeconds % 60).padStart(2, "0");
+            elements.timeDisplay.textContent = `${minutes}:${seconds}`;
+        }
+
+        function updateControls() {
+            elements.startButton.disabled = !state.ready || state.running;
+            elements.pauseButton.disabled = !state.ready || !state.running;
+            elements.durationInput.disabled = state.running || state.finished;
+            if (state.finished) {
+                elements.startButton.textContent = "再挑戰一次";
+            } else if (remainingMs < getDurationSeconds() * 1000) {
+                elements.startButton.textContent = "繼續";
+            } else {
+                elements.startButton.textContent = "開始";
+            }
+        }
+
+        function updatePoseDisplay() {
+            elements.poseDisplay.className = "pose-pill";
+            if (currentPoseState === "up") {
+                elements.poseDisplay.textContent = `開 ${Math.round(currentPoseConfidence * 100)}%`;
+                elements.poseDisplay.classList.add("up");
+                return;
+            }
+            if (currentPoseState === "down") {
+                elements.poseDisplay.textContent = `合 ${Math.round(currentPoseConfidence * 100)}%`;
+                elements.poseDisplay.classList.add("down");
+                return;
+            }
+            elements.poseDisplay.textContent = state.ready ? "辨識中" : "待機";
+        }
+
+        function createPredictionRows() {
+            elements.labelContainer.innerHTML = "";
+            for (let i = 0; i < maxPredictions; i += 1) {
+                const row = document.createElement("div");
+                row.className = "prediction-row";
+                row.innerHTML = `
+                    <span class="prediction-name">Class ${i + 1}</span>
+                    <span class="meter"><span class="meter-fill"></span></span>
+                    <span class="prediction-score">0%</span>
+                `;
+                elements.labelContainer.appendChild(row);
+            }
+        }
+
+        function updatePredictionRows(prediction) {
+            prediction.forEach((item, index) => {
+                const row = elements.labelContainer.children[index];
+                if (!row) {
+                    return;
+                }
+
+                row.querySelector(".prediction-name").textContent = item.className;
+                row.querySelector(".meter-fill").style.width = `${Math.round(item.probability * 100)}%`;
+                row.querySelector(".prediction-score").textContent = `${Math.round(item.probability * 100)}%`;
+            });
+        }
+
+        function drawPose(pose) {
+            if (!webcam || !webcam.canvas) {
+                return;
+            }
+
+            ctx.drawImage(webcam.canvas, 0, 0, CANVAS_SIZE, CANVAS_SIZE);
+            if (!pose) {
+                return;
+            }
+
+            const colors = getPoseColors();
+            tmPose.drawKeypoints(pose.keypoints, MIN_PART_CONFIDENCE, ctx, 7, colors.fill, colors.stroke);
+            tmPose.drawSkeleton(pose.keypoints, MIN_PART_CONFIDENCE, ctx, 5, colors.stroke);
+        }
+
+        function getPoseColors() {
+            if (currentPoseState === "up") {
+                return { fill: "#F9E795", stroke: "#F9E795" };
+            }
+            if (currentPoseState === "down") {
+                return { fill: "#F96167", stroke: "#F96167" };
+            }
+            return { fill: "#E5DDD5", stroke: "#FFFFFF" };
+        }
+
+        function setStatus(message) {
+            elements.statusText.textContent = message;
+        }
+
+        function ringBell() {
+            if (!ensureAudioContext()) {
+                return;
+            }
+
+            const now = audioContext.currentTime;
+            [880, 1175].forEach((frequency, index) => {
+                const oscillator = audioContext.createOscillator();
+                const gain = audioContext.createGain();
+                oscillator.type = "sine";
+                oscillator.frequency.value = frequency;
+                gain.gain.setValueAtTime(0.001, now + index * 0.18);
+                gain.gain.exponentialRampToValueAtTime(0.28, now + index * 0.18 + 0.02);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + index * 0.18 + 0.16);
+                oscillator.connect(gain);
+                gain.connect(audioContext.destination);
+                oscillator.start(now + index * 0.18);
+                oscillator.stop(now + index * 0.18 + 0.17);
+            });
+        }
+
+        function ensureAudioContext() {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContext) {
+                return false;
+            }
+
+            if (!audioContext) {
+                audioContext = new AudioContext();
+            }
+
+            if (audioContext.state === "suspended") {
+                audioContext.resume();
+            }
+
+            return true;
+        }
+    </script>
+</body>
+</html>
