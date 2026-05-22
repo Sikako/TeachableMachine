@@ -424,7 +424,9 @@
             }
 
             .rule-list {
-                display: none;
+                grid-column: span 2;
+                padding: 8px 10px;
+                border-left-width: 6px;
             }
         }
 
@@ -564,6 +566,14 @@
                 gap: 6px;
             }
 
+            .rule-list {
+                grid-column: auto;
+                padding: 6px 8px;
+                border-left-width: 4px;
+                font-size: 0.66rem;
+                line-height: 1.18;
+            }
+
             .action,
             .action.primary {
                 grid-column: auto;
@@ -634,7 +644,7 @@
                 </div>
 
                 <p class="rule-list">
-                    <strong>任務規則：</strong>模型偵測到「開」再切換到「合」時計為 1 次。暫停時仍會顯示骨架，方便調整站位。
+                    <strong>任務規則：</strong>手腕高過肩膀 = 開；回到腰線 = 合。一開一合 = 1 次。
                 </p>
             </aside>
         </section>
@@ -646,6 +656,8 @@
         const URL = "https://teachablemachine.withgoogle.com/models/ba40_g-ne/";
         const MIN_CLASS_CONFIDENCE = 0.75;
         const MIN_PART_CONFIDENCE = 0.5;
+        const OPEN_WRIST_MARGIN = 8;
+        const WAIST_RATIO = 0.78;
         const CANVAS_SIZE = 480;
 
         let model;
@@ -743,10 +755,16 @@
             const { pose, posenetOutput } = await model.estimatePose(webcam.canvas);
             const prediction = await model.predict(posenetOutput);
             const topPrediction = getTopPrediction(prediction);
-            const poseState = normalizePoseLabel(topPrediction.className);
+            const modelPoseState = normalizePoseLabel(topPrediction.className);
+            const keypointPoseState = pose ? inferPoseFromKeypoints(pose.keypoints) : null;
 
-            currentPoseState = topPrediction.probability >= MIN_CLASS_CONFIDENCE ? poseState : null;
-            currentPoseConfidence = topPrediction.probability;
+            if (keypointPoseState) {
+                currentPoseState = keypointPoseState;
+                currentPoseConfidence = getKeypointConfidence(pose.keypoints);
+            } else {
+                currentPoseState = topPrediction.probability >= MIN_CLASS_CONFIDENCE ? modelPoseState : null;
+                currentPoseConfidence = topPrediction.probability;
+            }
 
             updatePredictionRows(prediction);
             updatePoseDisplay();
@@ -773,6 +791,72 @@
                 return "down";
             }
             return null;
+        }
+
+        function inferPoseFromKeypoints(keypoints) {
+            const parts = getKeypointParts(keypoints);
+            const required = [
+                parts.leftWrist,
+                parts.rightWrist,
+                parts.leftShoulder,
+                parts.rightShoulder,
+                parts.leftHip,
+                parts.rightHip
+            ];
+
+            if (!required.every(isReliableKeypoint)) {
+                return null;
+            }
+
+            const shoulderY = averageY(parts.leftShoulder, parts.rightShoulder);
+            const wristY = averageY(parts.leftWrist, parts.rightWrist);
+            const hipY = averageY(parts.leftHip, parts.rightHip);
+            const waistY = shoulderY + (hipY - shoulderY) * WAIST_RATIO;
+            const bothWristsAboveShoulders =
+                parts.leftWrist.position.y <= parts.leftShoulder.position.y - OPEN_WRIST_MARGIN &&
+                parts.rightWrist.position.y <= parts.rightShoulder.position.y - OPEN_WRIST_MARGIN;
+            const bothWristsAtWaist =
+                parts.leftWrist.position.y >= waistY &&
+                parts.rightWrist.position.y >= waistY;
+
+            if (bothWristsAboveShoulders) {
+                return "up";
+            }
+
+            if (bothWristsAtWaist && wristY > shoulderY) {
+                return "down";
+            }
+
+            return null;
+        }
+
+        function getKeypointParts(keypoints) {
+            return keypoints.reduce((parts, keypoint) => {
+                parts[keypoint.part] = keypoint;
+                return parts;
+            }, {});
+        }
+
+        function isReliableKeypoint(keypoint) {
+            return keypoint && keypoint.score >= MIN_PART_CONFIDENCE && keypoint.position;
+        }
+
+        function averageY(...keypoints) {
+            return keypoints.reduce((sum, keypoint) => sum + keypoint.position.y, 0) / keypoints.length;
+        }
+
+        function getKeypointConfidence(keypoints) {
+            const parts = getKeypointParts(keypoints);
+            const required = [
+                parts.leftWrist,
+                parts.rightWrist,
+                parts.leftShoulder,
+                parts.rightShoulder,
+                parts.leftHip,
+                parts.rightHip
+            ];
+            const scoreTotal = required.reduce((sum, keypoint) => sum + keypoint.score, 0);
+            return scoreTotal / required.length;
         }
 
         function updateJumpCounter(poseState) {
