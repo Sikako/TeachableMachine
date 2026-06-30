@@ -652,6 +652,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/pose@0.8/dist/teachablemachine-pose.min.js"></script>
+    <script src="./pose-rules.js"></script>
     <script>
         const MODEL_URL = "./model/";
         const MIN_CLASS_CONFIDENCE = 0.75;
@@ -664,6 +665,12 @@
             ["up", "up"],
             ["down", "down"]
         ]);
+        const {
+            classifyPoseGeometry,
+            combinePoseState,
+            createPoseStabilizer
+        } = window.PoseRules;
+        const stabilizePoseState = createPoseStabilizer(2);
 
         let model;
         let webcam;
@@ -763,8 +770,18 @@
             const prediction = await model.predict(posenetOutput);
             const topPrediction = getTopPrediction(prediction);
             const modelPoseState = normalizePoseLabel(topPrediction.className);
-            currentPoseState = topPrediction.probability >= MIN_CLASS_CONFIDENCE ? modelPoseState : null;
-            currentPoseConfidence = topPrediction.probability;
+            const geometryPoseState = classifyPoseGeometry(pose?.keypoints, MIN_PART_CONFIDENCE);
+            const combinedPoseState = combinePoseState(
+                modelPoseState,
+                topPrediction.probability,
+                geometryPoseState,
+                MIN_CLASS_CONFIDENCE
+            );
+            const stabilizedPoseState = stabilizePoseState(combinedPoseState);
+            if (stabilizedPoseState && stabilizedPoseState === combinedPoseState) {
+                currentPoseConfidence = topPrediction.probability;
+            }
+            currentPoseState = stabilizedPoseState;
 
             updatePredictionRows(prediction);
             updatePoseDisplay();
