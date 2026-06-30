@@ -653,12 +653,17 @@
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/pose@0.8/dist/teachablemachine-pose.min.js"></script>
     <script>
-        const URL = "https://teachablemachine.withgoogle.com/models/s1LQyn3fS/";
+        const MODEL_URL = "./model/";
         const MIN_CLASS_CONFIDENCE = 0.75;
         const MIN_PART_CONFIDENCE = 0.5;
-        const OPEN_WRIST_MARGIN = 8;
-        const WAIST_RATIO = 0.78;
         const CANVAS_SIZE = 480;
+        const POSE_LABELS = ["開", "合"];
+        const POSE_STATE_BY_LABEL = new Map([
+            ["開", "up"],
+            ["合", "down"],
+            ["up", "up"],
+            ["down", "down"]
+        ]);
 
         let model;
         let webcam;
@@ -717,8 +722,10 @@
         async function initializeTrainer() {
             try {
                 setStatus("模型載入中...");
-                const modelURL = URL + "model.json";
-                const metadataURL = URL + "metadata.json";
+                const modelVersion = new URLSearchParams(window.location.search).get("model");
+                const versionQuery = modelVersion ? `?v=${encodeURIComponent(modelVersion)}` : "";
+                const modelURL = MODEL_URL + "model.json" + versionQuery;
+                const metadataURL = MODEL_URL + "metadata.json" + versionQuery;
                 model = await tmPose.load(modelURL, metadataURL);
                 maxPredictions = model.getTotalClasses();
                 createPredictionRows();
@@ -756,15 +763,8 @@
             const prediction = await model.predict(posenetOutput);
             const topPrediction = getTopPrediction(prediction);
             const modelPoseState = normalizePoseLabel(topPrediction.className);
-            const keypointPoseState = pose ? inferPoseFromKeypoints(pose.keypoints) : null;
-
-            if (keypointPoseState) {
-                currentPoseState = keypointPoseState;
-                currentPoseConfidence = getKeypointConfidence(pose.keypoints);
-            } else {
-                currentPoseState = topPrediction.probability >= MIN_CLASS_CONFIDENCE ? modelPoseState : null;
-                currentPoseConfidence = topPrediction.probability;
-            }
+            currentPoseState = topPrediction.probability >= MIN_CLASS_CONFIDENCE ? modelPoseState : null;
+            currentPoseConfidence = topPrediction.probability;
 
             updatePredictionRows(prediction);
             updatePoseDisplay();
@@ -783,80 +783,21 @@
         }
 
         function normalizePoseLabel(className) {
-            const normalized = className.toLowerCase();
-            if (normalized.includes("開") || normalized.includes("up")) {
-                return "up";
-            }
-            if (normalized.includes("合") || normalized.includes("down")) {
-                return "down";
-            }
-            return null;
-        }
-
-        function inferPoseFromKeypoints(keypoints) {
-            const parts = getKeypointParts(keypoints);
-            const required = [
-                parts.leftWrist,
-                parts.rightWrist,
-                parts.leftShoulder,
-                parts.rightShoulder,
-                parts.leftHip,
-                parts.rightHip
-            ];
-
-            if (!required.every(isReliableKeypoint)) {
+            if (typeof className !== "string") {
                 return null;
             }
+            return POSE_STATE_BY_LABEL.get(className.trim().toLowerCase()) ?? null;
+        }
 
-            const shoulderY = averageY(parts.leftShoulder, parts.rightShoulder);
-            const wristY = averageY(parts.leftWrist, parts.rightWrist);
-            const hipY = averageY(parts.leftHip, parts.rightHip);
-            const waistY = shoulderY + (hipY - shoulderY) * WAIST_RATIO;
-            const bothWristsAboveShoulders =
-                parts.leftWrist.position.y <= parts.leftShoulder.position.y - OPEN_WRIST_MARGIN &&
-                parts.rightWrist.position.y <= parts.rightShoulder.position.y - OPEN_WRIST_MARGIN;
-            const bothWristsAtWaist =
-                parts.leftWrist.position.y >= waistY &&
-                parts.rightWrist.position.y >= waistY;
-
-            if (bothWristsAboveShoulders) {
-                return "up";
+        function getPoseDisplayLabel(className) {
+            const poseState = normalizePoseLabel(className);
+            if (poseState === "up") {
+                return POSE_LABELS[0];
             }
-
-            if (bothWristsAtWaist && wristY > shoulderY) {
-                return "down";
+            if (poseState === "down") {
+                return POSE_LABELS[1];
             }
-
-            return null;
-        }
-
-        function getKeypointParts(keypoints) {
-            return keypoints.reduce((parts, keypoint) => {
-                parts[keypoint.part] = keypoint;
-                return parts;
-            }, {});
-        }
-
-        function isReliableKeypoint(keypoint) {
-            return keypoint && keypoint.score >= MIN_PART_CONFIDENCE && keypoint.position;
-        }
-
-        function averageY(...keypoints) {
-            return keypoints.reduce((sum, keypoint) => sum + keypoint.position.y, 0) / keypoints.length;
-        }
-
-        function getKeypointConfidence(keypoints) {
-            const parts = getKeypointParts(keypoints);
-            const required = [
-                parts.leftWrist,
-                parts.rightWrist,
-                parts.leftShoulder,
-                parts.rightShoulder,
-                parts.leftHip,
-                parts.rightHip
-            ];
-            const scoreTotal = required.reduce((sum, keypoint) => sum + keypoint.score, 0);
-            return scoreTotal / required.length;
+            return className;
         }
 
         function updateJumpCounter(poseState) {
@@ -986,7 +927,7 @@
                 const row = document.createElement("div");
                 row.className = "prediction-row";
                 row.innerHTML = `
-                    <span class="prediction-name">Class ${i + 1}</span>
+                    <span class="prediction-name">${POSE_LABELS[i] ?? ""}</span>
                     <span class="meter"><span class="meter-fill"></span></span>
                     <span class="prediction-score">0%</span>
                 `;
@@ -1001,7 +942,7 @@
                     return;
                 }
 
-                row.querySelector(".prediction-name").textContent = item.className;
+                row.querySelector(".prediction-name").textContent = getPoseDisplayLabel(item.className);
                 row.querySelector(".meter-fill").style.width = `${Math.round(item.probability * 100)}%`;
                 row.querySelector(".prediction-score").textContent = `${Math.round(item.probability * 100)}%`;
             });
