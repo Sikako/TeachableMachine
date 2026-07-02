@@ -38,7 +38,8 @@
         }
 
         button,
-        input {
+        input,
+        select {
             font: inherit;
         }
 
@@ -295,6 +296,23 @@
             gap: 8px;
         }
 
+        .settings-row {
+            display: grid;
+            grid-template-columns: minmax(0, 1.45fr) minmax(130px, 0.55fr);
+            gap: 10px;
+            align-items: end;
+        }
+
+        .camera-select {
+            width: 100%;
+            min-width: 0;
+            border: 3px solid var(--ink);
+            background: var(--white);
+            color: var(--ink);
+            font-weight: 800;
+            padding: clamp(7px, 1.5vh, 12px);
+        }
+
         label {
             color: var(--muted);
             font-size: 0.92rem;
@@ -383,10 +401,81 @@
             color: var(--ink);
         }
 
+        @media (max-height: 760px) {
+            .page {
+                padding: 10px 0;
+                gap: 8px;
+            }
+
+            .hero {
+                padding-bottom: 8px;
+            }
+
+            .eyebrow {
+                margin-bottom: 3px;
+                font-size: 0.7rem;
+            }
+
+            h1 {
+                font-size: clamp(1.7rem, 4vw, 3.1rem);
+            }
+
+            .hero-note {
+                margin: 0;
+                font-size: 0.78rem;
+            }
+
+            .camera-panel,
+            .control-panel {
+                padding: 10px;
+                gap: 7px;
+            }
+
+            .scoreboard {
+                grid-template-columns: 1.2fr 0.8fr 0.8fr;
+                gap: 7px;
+            }
+
+            .metric,
+            .metric.primary {
+                grid-column: auto;
+                min-height: 78px;
+                padding: 7px;
+            }
+
+            .metric-value {
+                font-size: clamp(1.55rem, 4vw, 2.8rem);
+            }
+
+            .pose-pill {
+                min-height: 34px;
+            }
+
+            .timer-form {
+                gap: 4px;
+            }
+
+            .camera-select,
+            #durationInput {
+                padding: 6px 8px;
+            }
+
+            .action {
+                min-height: 38px;
+            }
+
+            .rule-list {
+                padding: 7px 9px;
+                border-left-width: 5px;
+                font-size: 0.72rem;
+            }
+        }
+
         @media (max-width: 900px) {
             .stage {
                 grid-template-columns: 1fr;
                 grid-template-rows: minmax(0, 1fr) auto;
+                min-height: 0;
             }
 
             .hero {
@@ -629,11 +718,20 @@
                     </div>
                 </div>
 
-                <div class="timer-form">
-                    <label for="durationInput">倒數秒數</label>
-                    <div class="duration-control">
-                        <input id="durationInput" type="number" min="5" max="300" step="5" value="30">
-                        <span class="seconds-label">秒</span>
+                <div class="settings-row">
+                    <div class="timer-form">
+                        <label for="cameraSelect">使用鏡頭</label>
+                        <select class="camera-select" id="cameraSelect" disabled>
+                            <option value="">正在取得鏡頭清單...</option>
+                        </select>
+                    </div>
+
+                    <div class="timer-form">
+                        <label for="durationInput">倒數秒數</label>
+                        <div class="duration-control">
+                            <input id="durationInput" type="number" min="5" max="300" step="5" value="30">
+                            <span class="seconds-label">秒</span>
+                        </div>
                     </div>
                 </div>
 
@@ -683,6 +781,7 @@
         let currentPoseState = null;
         let currentPoseConfidence = 0;
         let audioContext;
+        let cameraSwitching = false;
 
         const state = {
             ready: false,
@@ -708,6 +807,7 @@
             elements.countDisplay = document.getElementById("countDisplay");
             elements.poseDisplay = document.getElementById("poseDisplay");
             elements.durationInput = document.getElementById("durationInput");
+            elements.cameraSelect = document.getElementById("cameraSelect");
             elements.startButton = document.getElementById("startButton");
             elements.pauseButton = document.getElementById("pauseButton");
             elements.resetButton = document.getElementById("resetButton");
@@ -718,6 +818,7 @@
             elements.startButton.addEventListener("click", startChallenge);
             elements.pauseButton.addEventListener("click", pauseChallenge);
             elements.resetButton.addEventListener("click", resetSession);
+            elements.cameraSelect.addEventListener("change", switchCamera);
             elements.durationInput.addEventListener("input", () => {
                 if (!state.running && !state.finished) {
                     remainingMs = getDurationSeconds() * 1000;
@@ -741,6 +842,7 @@
                 webcam = new tmPose.Webcam(CANVAS_SIZE, CANVAS_SIZE, true);
                 await webcam.setup();
                 await webcam.play();
+                await refreshCameraList();
 
                 state.ready = true;
                 elements.loadingCover.classList.add("is-hidden");
@@ -756,13 +858,64 @@
         }
 
         async function loop(timestamp) {
-            if (webcam) {
+            if (webcam && !cameraSwitching) {
                 webcam.update();
                 await predict();
             }
 
             updateTimer(timestamp);
             window.requestAnimationFrame(loop);
+        }
+
+        async function refreshCameraList() {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const cameras = devices.filter((device) => device.kind === "videoinput");
+            const previousValue = elements.cameraSelect.value;
+            elements.cameraSelect.innerHTML = "";
+
+            cameras.forEach((camera, index) => {
+                const option = document.createElement("option");
+                option.value = camera.deviceId;
+                option.textContent = camera.label || `攝影機 ${index + 1}`;
+                elements.cameraSelect.appendChild(option);
+            });
+
+            elements.cameraSelect.disabled = cameras.length < 2;
+            if (cameras.some((camera) => camera.deviceId === previousValue)) {
+                elements.cameraSelect.value = previousValue;
+            }
+        }
+
+        async function switchCamera() {
+            const deviceId = elements.cameraSelect.value;
+            if (!deviceId || cameraSwitching) {
+                return;
+            }
+
+            cameraSwitching = true;
+            state.ready = false;
+            updateControls();
+            setStatus("正在切換攝影機...");
+            elements.cameraSelect.disabled = true;
+
+            try {
+                if (webcam) {
+                    webcam.stop();
+                }
+                webcam = new tmPose.Webcam(CANVAS_SIZE, CANVAS_SIZE, true);
+                await webcam.setup({ deviceId: { exact: deviceId } });
+                await webcam.play();
+                await refreshCameraList();
+                state.ready = true;
+                setStatus("準備完成，請按開始");
+            } catch (error) {
+                console.error(error);
+                setStatus("無法使用選取的攝影機，請改選其他鏡頭");
+            } finally {
+                cameraSwitching = false;
+                elements.cameraSelect.disabled = elements.cameraSelect.options.length < 2;
+                updateControls();
+            }
         }
 
         async function predict() {
